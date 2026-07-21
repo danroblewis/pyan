@@ -494,6 +494,34 @@ def main(cli_args=None):
         help="module-level import dependency analysis (use --module-level --help for full options)",
     )
 
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        default=False,
+        dest="web",
+        help=(
+            "serve a local web UI for exploring implicit interfaces "
+            "(exposed members, external consumers, boundary violations). "
+            "Re-analyzes on demand so refactoring progress is visible."
+        ),
+    )
+
+    parser.add_argument(
+        "--port",
+        default=8765,
+        type=int,
+        dest="port",
+        help="port for the --web server (default: 8765)",
+    )
+
+    parser.add_argument(
+        "--no-browser",
+        action="store_false",
+        default=True,
+        dest="open_browser",
+        help="with --web, do not open a browser automatically",
+    )
+
     known_args, unknown_args = parser.parse_known_args(cli_args)
 
     filenames = [os.path.abspath(fn2) for fn2 in expand_sources(unknown_args, exclude=known_args.exclude)]
@@ -581,6 +609,14 @@ def main(cli_args=None):
             "https://github.com/Technologicat/pyan/issues so it can be "
             "added.\n"
         )
+
+    if known_args.web:
+        from .web import serve
+        serve(unknown_args, root=root, exclude=known_args.exclude,
+              namespace_constructors=extra_constructors,
+              port=known_args.port, open_browser=known_args.open_browser,
+              logger=logger)
+        return
 
     graph = _build_graph(filenames, root=root, function=known_args.function,
                          namespace=known_args.namespace,

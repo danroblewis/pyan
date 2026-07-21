@@ -36,7 +36,7 @@ Tests in `tests/` are organized by concern:
 
 - **Syntax/feature coverage**, one file per cluster: `test_classes.py` (decorators, inheritance, super, class constants), `test_functions.py` (lambdas, closures, defaults, signature annotations), `test_iteration.py` (for, async-for, comprehensions, iter protocol), `test_async_context.py`, `test_match.py`, `test_assignments.py` (walrus, chained assign, star unpacking, AnnAssign), `test_imports.py`, `test_type_params.py` (PEP 695: type aliases + generics), `test_misc.py` (del, nested attr, builtins).
 - **Feature-specific concerns**: `test_namespace_objects.py` (NAME-Node-ification + NAMESPACE_OBJECT overlay, #129), `test_query_api.py` (direction / find_paths / filter_by_depth).
-- **Other**: `test_modvis.py` (module graph), `test_writers.py` (output formats), `test_analyzer.py` (low-level helpers), `test_regressions.py`, `test_sphinx.py`, `test_coverage.py` (coverage gap tests), `test_exclude.py`, `test_from_sources.py`.
+- **Other**: `test_modvis.py` (module graph), `test_writers.py` (output formats), `test_analyzer.py` (low-level helpers), `test_regressions.py`, `test_sphinx.py`, `test_coverage.py` (coverage gap tests), `test_exclude.py`, `test_from_sources.py`, `test_interfaces.py` (implicit-interface model + violations).
 
 Version-specific source fixtures live in `tests/test_code_312/` (3.12+ syntax).
 
@@ -99,7 +99,13 @@ source files → CallGraphVisitor (analyzer.py) → Node graph → VisualGraph (
 
 - **`modvis.py`** (~620 lines) — Module-level import analysis. `ImportVisitor` (separate `ast.NodeVisitor`) finds import statements. `create_modulegraph()` builds a module dependency graph. Includes import cycle detection. `__init__` modules excluded by default (`with_init` parameter). Can also be run as a CLI mode via `pyan3 --module-level`.
 
-- **`main.py`** (~525 lines) — CLI entry point and `create_callgraph()` API. Argument parsing, source expansion, output format dispatch. Supports `--depth`, `--direction`, `--concentrate`, `--paths-from`/`--paths-to`, `--graphviz-layout`, `--dot-ranksep`.
+- **`interfaces.py`** (~330 lines) — Implicit-interface extraction. `build_interface_model(visitor)` distills a completed analysis into a JSON-serializable model: per-module members with external consumers, aggregated module→module edges with member-level refs, and boundary violations (cross-module `_private` access, cross-class private access, dependency cycles via Tarjan SCC, plus advisories: unused-externally, wide-interface). `create_interface_model()` is the analyze-and-build convenience wrapper. Data source for `pyan3 --web`.
+
+- **`web.py`** (~200 lines) — Local web server for the interface explorer (`pyan3 --web`). Stdlib-only (`http.server`), binds localhost. `InterfaceServer` owns analysis state and re-runs on demand (`POST /api/reanalyze`); keeps the original glob patterns so new files are picked up. `/api/source` serves snippets, restricted to files from the last analysis. Analysis errors return JSON 500 rather than killing the server.
+
+- **`webui.html`** — Self-contained single-page UI for `--web` (vanilla JS, no external resources). Three views: per-module interface ledger, violations table (advisories hidden by default), dependency structure matrix (providers-first ordering; cycles appear above the diagonal). Re-analyze diffs violation keys against the previous run.
+
+- **`main.py`** (~570 lines) — CLI entry point and `create_callgraph()` API. Argument parsing, source expansion, output format dispatch. Supports `--depth`, `--direction`, `--concentrate`, `--paths-from`/`--paths-to`, `--graphviz-layout`, `--dot-ranksep`, `--web`/`--port`/`--no-browser`.
 
 - **`sphinx.py`** (~170 lines) — Sphinx extension providing `.. callgraph::` directive for embedding call graphs in documentation.
 

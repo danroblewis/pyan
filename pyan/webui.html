@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pyan · interface ledger</title>
+<style>
+  :root {
+    --paper: #F7F6F2;
+    --panel: #FFFFFF;
+    --ink: #1C2431;
+    --muted: #67707E;
+    --rule: #E3E1D9;
+    --rule-soft: #EDEBE4;
+    --red: #C3402F;
+    --red-soft: #F7E3DF;
+    --amber: #A87A1F;
+    --amber-soft: #F4EAD3;
+    --info: #4C6B8A;
+    --info-soft: #E4EBF2;
+    --mono-bg: #F1F0EA;
+    --ok: #4E7A54;
+    --sans: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #14181F;
+      --panel: #1B212B;
+      --ink: #DDE3EC;
+      --muted: #8B95A5;
+      --rule: #2A3240;
+      --rule-soft: #232A36;
+      --red: #E06052;
+      --red-soft: #3A2320;
+      --amber: #D19A3D;
+      --amber-soft: #362C18;
+      --info: #7FA3C7;
+      --info-soft: #1F2B38;
+      --mono-bg: #10141B;
+      --ok: #79A981;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--sans);
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--paper);
+    display: flex;
+    flex-direction: column;
+  }
+  code, .mono { font-family: var(--mono); }
+  button {
+    font: inherit; color: inherit; background: var(--panel);
+    border: 1px solid var(--rule); border-radius: 4px;
+    padding: 4px 10px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, a:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--info); outline-offset: 1px;
+  }
+  input[type=search] {
+    font: inherit; color: inherit; background: var(--panel);
+    border: 1px solid var(--rule); border-radius: 4px; padding: 4px 8px;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 16px; border-bottom: 1px solid var(--rule);
+    background: var(--panel); flex-wrap: wrap;
+  }
+  .wordmark { font-family: var(--mono); font-size: 15px; letter-spacing: .02em; }
+  .wordmark b { font-weight: 700; }
+  .wordmark .dim { color: var(--muted); }
+  #summary { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
+  .sev-count { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.high { background: var(--red); }
+  .dot.medium { background: var(--amber); }
+  .dot.info { background: var(--info); }
+  header .spacer { flex: 1; }
+  #reanalyze { border-color: var(--ink); font-weight: 600; }
+  #reanalyze:disabled { opacity: .5; cursor: wait; }
+  #analyzed-at { font-size: 12px; color: var(--muted); }
+  #diff-toast {
+    font-size: 12px; padding: 3px 10px; border-radius: 12px;
+    background: var(--info-soft); color: var(--info); display: none;
+  }
+  #diff-toast.show { display: inline-block; }
+  #diff-toast .resolved { color: var(--ok); font-weight: 600; }
+  #diff-toast .fresh { color: var(--red); font-weight: 600; }
+
+  /* ---------- layout ---------- */
+  main { flex: 1; display: flex; min-height: 0; }
+  #sidebar {
+    width: 300px; min-width: 220px; border-right: 1px solid var(--rule);
+    display: flex; flex-direction: column; background: var(--panel);
+  }
+  #sidebar .pad { padding: 10px 12px 6px; }
+  #module-search { width: 100%; }
+  #module-list { overflow-y: auto; flex: 1; list-style: none; padding: 0 0 12px; }
+  #module-list li {
+    padding: 7px 12px 7px 16px; cursor: pointer; border-left: 3px solid transparent;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  #module-list li:hover { background: var(--rule-soft); }
+  #module-list li.selected { border-left-color: var(--ink); background: var(--rule-soft); }
+  #module-list .mname { font-family: var(--mono); font-size: 13px; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+  #module-list .mname bdi { unicode-bidi: plaintext; }
+  .badges { display: inline-flex; gap: 6px; font-size: 11px; align-items: baseline; }
+  .badge-surface { color: var(--muted); }
+  .badge-v { font-weight: 700; }
+  .badge-v.high { color: var(--red); }
+  .badge-v.medium { color: var(--amber); }
+
+  #content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  nav.tabs { display: flex; gap: 2px; padding: 8px 16px 0; border-bottom: 1px solid var(--rule); }
+  nav.tabs button {
+    border: 1px solid transparent; border-bottom: none; background: none;
+    border-radius: 6px 6px 0 0; padding: 6px 14px; color: var(--muted);
+  }
+  nav.tabs button.active {
+    background: var(--paper); border-color: var(--rule);
+    color: var(--ink); font-weight: 600; position: relative; top: 1px;
+  }
+  #view { flex: 1; overflow-y: auto; padding: 18px 22px 60px; }
+
+  /* ---------- interface view ---------- */
+  .mod-head h1 { font-family: var(--mono); font-size: 20px; font-weight: 700; }
+  .mod-head .file { color: var(--muted); font-size: 12px; font-family: var(--mono); margin-top: 2px; }
+  .fan-row { display: flex; gap: 18px; margin: 12px 0 4px; flex-wrap: wrap; font-size: 13px; }
+  .fan-row .lbl { color: var(--muted); margin-right: 6px; }
+  .chip {
+    font-family: var(--mono); font-size: 12px; padding: 1px 8px;
+    border: 1px solid var(--rule); border-radius: 10px; cursor: pointer; background: var(--panel);
+  }
+  .chip:hover { border-color: var(--info); color: var(--info); }
+  .filters { display: flex; gap: 14px; align-items: center; margin: 14px 0 6px;
+    padding: 8px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    font-size: 13px; flex-wrap: wrap; }
+  .filters label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; color: var(--muted); }
+  .filters input[type=checkbox] { accent-color: var(--ink); }
+
+  .ledger { margin-top: 10px; }
+  .lgroup-title {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    margin: 18px 0 4px; padding-bottom: 3px; border-bottom: 1px solid var(--rule);
+  }
+  .lgroup-title .k { color: var(--muted); font-weight: 400; }
+  .lrow { border-left: 3px solid transparent; }
+  .lrow.violating { border-left-color: var(--red); }
+  .lrow-main {
+    display: flex; align-items: baseline; gap: 10px; padding: 5px 6px 5px 10px;
+    cursor: pointer; border-radius: 3px;
+  }
+  .lrow-main:hover { background: var(--rule-soft); }
+  .kind {
+    font-family: var(--mono); font-size: 11px; width: 18px; height: 18px; line-height: 18px;
+    text-align: center; border-radius: 4px; background: var(--mono-bg); color: var(--muted);
+    flex: none; align-self: center;
+  }
+  .kind.class { color: var(--info); font-weight: 700; }
+  .mem-name { font-family: var(--mono); font-size: 13.5px; }
+  .mem-name.private { text-decoration: underline wavy var(--red) 1px; text-underline-offset: 3px; }
+  .leader { flex: 1; border-bottom: 1px dotted var(--rule); transform: translateY(-4px); min-width: 30px; }
+  .use-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .use-count b { color: var(--ink); }
+  .use-count.none { color: var(--muted); font-style: italic; }
+  .lrow-detail {
+    margin: 2px 0 10px 38px; padding: 10px 14px; border: 1px solid var(--rule);
+    border-radius: 6px; background: var(--panel); font-size: 13px;
+  }
+  .consumer-mod { margin: 4px 0; }
+  .consumer-mod .cm { font-family: var(--mono); font-weight: 700; cursor: pointer; }
+  .consumer-mod .cm:hover { color: var(--info); }
+  .consumer-mod .cq { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+  .detail-actions { margin-top: 8px; display: flex; gap: 8px; }
+  .snippet {
+    margin-top: 10px; background: var(--mono-bg); border: 1px solid var(--rule); border-radius: 6px;
+    font-family: var(--mono); font-size: 12px; overflow-x: auto; padding: 8px 0;
+  }
+  .snippet .ln { display: flex; }
+  .snippet .no { width: 52px; flex: none; text-align: right; padding-right: 12px; color: var(--muted); user-select: none; }
+  .snippet .tx { white-space: pre; padding-right: 16px; }
+  .snippet .ln.focus { background: var(--amber-soft); }
+
+  /* ---------- violations view ---------- */
+  .vio-filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .sev-toggle {
+    display: inline-flex; gap: 6px; align-items: center; padding: 3px 10px;
+    border: 1px solid var(--rule); border-radius: 14px; cursor: pointer; font-size: 13px;
+    background: var(--panel); color: var(--muted); user-select: none;
+  }
+  .sev-toggle.on { color: var(--ink); border-color: var(--muted); }
+  .sev-toggle input { display: none; }
+  table.vio { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.vio th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--rule);
+  }
+  table.vio td { padding: 7px 10px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  table.vio tr.clickable { cursor: pointer; }
+  table.vio tr.clickable:hover { background: var(--rule-soft); }
+  .kind-chip {
+    font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 9px;
+    background: var(--mono-bg); color: var(--muted); white-space: nowrap;
+  }
+  td.msg { max-width: 560px; }
+  td.loc { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .vio-new { font-size: 10px; font-weight: 700; color: var(--red); border: 1px solid var(--red);
+    border-radius: 8px; padding: 0 6px; margin-left: 6px; vertical-align: 1px; }
+  .empty-note { color: var(--muted); padding: 30px 0; text-align: center; font-size: 14px; }
+
+  /* ---------- dependency matrix ---------- */
+  .dsm-note { color: var(--muted); font-size: 13px; margin-bottom: 12px; max-width: 70ch; }
+  .dsm-wrap { overflow: auto; max-width: 100%; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); }
+  table.dsm { border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+  table.dsm th { font-weight: 400; color: var(--muted); padding: 4px 6px; background: var(--panel); }
+  table.dsm thead th {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    text-align: left; vertical-align: bottom; max-height: 180px; position: sticky; top: 0;
+  }
+  table.dsm tbody th { text-align: right; position: sticky; left: 0; white-space: nowrap; }
+  table.dsm td {
+    width: 26px; height: 24px; text-align: center; border: 1px solid var(--rule-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  table.dsm td.diag { background: var(--rule-soft); }
+  table.dsm td.dep { cursor: pointer; }
+  table.dsm td.dep:hover { outline: 2px solid var(--info); outline-offset: -2px; }
+  table.dsm td.dep.leak { color: var(--red); font-weight: 700; background: var(--red-soft); }
+  table.dsm td.dep.selected { outline: 2px solid var(--ink); outline-offset: -2px; }
+  #dsm-refs { margin-top: 16px; }
+  #dsm-refs h3 { font-family: var(--mono); font-size: 14px; margin-bottom: 8px; }
+  .ref-row { font-family: var(--mono); font-size: 12.5px; padding: 3px 0; display: flex; gap: 8px; align-items: baseline; }
+  .ref-row .arrow { color: var(--muted); }
+  .ref-row .leak-mark { color: var(--red); font-weight: 700; }
+  .cycle-banner {
+    background: var(--amber-soft); border: 1px solid var(--amber); border-radius: 6px;
+    color: var(--ink); padding: 8px 12px; margin-bottom: 12px; font-size: 13px; font-family: var(--mono);
+  }
+
+  /* ---------- states ---------- */
+  .state-card { max-width: 60ch; margin: 60px auto; text-align: center; }
+  .state-card h2 { font-family: var(--mono); font-size: 16px; margin-bottom: 10px; }
+  .state-card p { color: var(--muted); margin-bottom: 16px; }
+  .state-card pre {
+    text-align: left; background: var(--mono-bg); border: 1px solid var(--rule);
+    padding: 10px 12px; border-radius: 6px; font-size: 12px; overflow-x: auto; margin-bottom: 16px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    #module-list li, .lrow-main, button, .chip { transition: background .12s, border-color .12s, color .12s; }
+  }
+  @media (max-width: 900px) {
+    main { flex-direction: column; }
+    #sidebar { width: 100%; max-height: 34vh; border-right: none; border-bottom: 1px solid var(--rule); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="wordmark"><b>pyan</b> <span class="dim">·</span> interface ledger</span>
+  <span id="summary"></span>
+  <span id="diff-toast"></span>
+  <span class="spacer"></span>
+  <span id="analyzed-at"></span>
+  <button id="reanalyze">Re-analyze</button>
+</header>
+<main>
+  <aside id="sidebar">
+    <div class="pad">
+      <input id="module-search" type="search" placeholder="Filter modules…" aria-label="Filter modules">
+    </div>
+    <ul id="module-list"></ul>
+  </aside>
+  <section id="content">
+    <nav class="tabs" role="tablist">
+      <button data-tab="interface" class="active" role="tab">Interface</button>
+      <button data-tab="violations" role="tab">Violations</button>
+      <button data-tab="deps" role="tab">Dependencies</button>
+    </nav>
+    <div id="view"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const state = {
+  model: null,
+  error: null,
+  tab: "interface",
+  selected: null,          // selected module name
+  moduleFilter: "",
+  // interface view filters
+  exposedOnly: true,
+  showInternal: false,
+  openRows: new Set(),     // member qnames expanded
+  // violations view filters
+  sev: { high: true, medium: true, info: false },
+  vioKind: "all",
+  vioSearch: "",
+  // dependency matrix
+  dsmCell: null,           // [source, target]
+  // diff vs previous analysis
+  prevVioKeys: null,
+  newVioKeys: new Set(),
+};
+
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s).replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const vioKey = v => [v.kind, v.consumer || "", v.target].join("|");
+
+const KIND_GLYPH = {
+  "class": "C", "function": "ƒ", "method": "m", "staticmethod": "s",
+  "classmethod": "c", "name": "=", "namespace-object": "□",
+  "attribute": "a", "import": "i", "module": "M", "---": "?", "???": "?",
+};
+
+/* ---------------- data ---------------- */
+
+async function loadModel(force) {
+  const btn = $("#reanalyze");
+  btn.disabled = true;
+  btn.textContent = force ? "Analyzing…" : "Loading…";
+  try {
+    const resp = force
+      ? await fetch("/api/reanalyze", { method: "POST" })
+      : await fetch("/api/model");
+    const data = await resp.json();
+    if (data.error) { state.error = data.error; state.model = null; }
+    else {
+      // diff against previous run
+      if (state.prevVioKeys) {
+        const now = new Set(data.violations.map(vioKey));
+        const resolved = [...state.prevVioKeys].filter(k => !now.has(k)).length;
+        state.newVioKeys = new Set([...now].filter(k => !state.prevVioKeys.has(k)));
+        showDiffToast(resolved, state.newVioKeys.size);
+        state.prevVioKeys = now;
+      } else {
+        state.prevVioKeys = new Set(data.violations.map(vioKey));
+      }
+      state.model = data;
+      state.error = null;
+      if (!state.selected || !data.modules[state.selected]) {
+        state.selected = defaultModule(data);
+      }
+    }
+  } catch (e) {
+    state.error = String(e);
+  }
+  btn.disabled = false;
+  btn.textContent = "Re-analyze";
+  renderAll();
+}
+
+function defaultModule(model) {
+  const ranked = rankedModules(model);
+  return ranked.length ? ranked[0][0] : null;
+}
+
+function vioCounts(model, mod) {
+  const c = { high: 0, medium: 0, info: 0 };
+  for (const v of model.violations) {
+    if (v.target_module === mod || v.consumer_module === mod) c[v.severity]++;
+  }
+  return c;
+}
+
+function rankedModules(model) {
+  const rows = Object.entries(model.modules).map(([name, m]) => {
+    const c = vioCounts(model, name);
+    return [name, m, c];
+  });
+  rows.sort((a, b) =>
+    b[2].high - a[2].high || b[2].medium - a[2].medium ||
+    b[1].surface - a[1].surface || a[0].localeCompare(b[0]));
+  return rows;
+}
+
+function showDiffToast(resolved, fresh) {
+  const el = $("#diff-toast");
+  if (!resolved && !fresh) {
+    el.innerHTML = "no change in findings";
+  } else {
+    const parts = [];
+    if (resolved) parts.push(`<span class="resolved">${resolved} resolved</span>`);
+    if (fresh) parts.push(`<span class="fresh">${fresh} new</span>`);
+    el.innerHTML = parts.join(" · ") + " since last analysis";
+  }
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 12000);
+}
+
+/* ---------------- rendering ---------------- */
+
+function renderAll() {
+  renderHeader();
+  renderSidebar();
+  renderView();
+}
+
+function renderHeader() {
+  const s = $("#summary"), at = $("#analyzed-at");
+  if (!state.model) { s.innerHTML = ""; at.textContent = ""; return; }
+  const c = state.model.summary.violation_counts;
+  s.innerHTML = `
+    <span>${state.model.summary.module_count} modules</span>
+    <span class="sev-count"><span class="dot high"></span>${c.high} high</span>
+    <span class="sev-count"><span class="dot medium"></span>${c.medium} medium</span>
+    <span class="sev-count"><span class="dot info"></span>${c.info} advisory</span>`;
+  const a = state.model.analysis;
+  at.textContent = a ? `${a.file_count} files · ${a.duration_s}s · at ${a.analyzed_at}` : "";
+}
+
+function renderSidebar() {
+  const ul = $("#module-list");
+  if (!state.model) { ul.innerHTML = ""; return; }
+  const q = state.moduleFilter.toLowerCase();
+  ul.innerHTML = rankedModules(state.model)
+    .filter(([name]) => !q || name.toLowerCase().includes(q))
+    .map(([name, m, c]) => `
+      <li data-mod="${esc(name)}" class="${name === state.selected ? "selected" : ""}" tabindex="0">
+        <span class="mname"><bdi>${esc(name)}</bdi></span>
+        <span class="badges">
+          ${c.high ? `<span class="badge-v high">●${c.high}</span>` : ""}
+          ${c.medium ? `<span class="badge-v medium">●${c.medium}</span>` : ""}
+          <span class="badge-surface">${m.surface}⇢</span>
+        </span>
+      </li>`).join("");
+}
+
+function renderView() {
+  document.querySelectorAll("nav.tabs button").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === state.tab));
+  const view = $("#view");
+  if (state.error) {
+    view.innerHTML = `
+      <div class="state-card">
+        <h2>Analysis failed</h2>
+        <p>The server is still running. Fix the problem and re-analyze.</p>
+        <pre>${esc(state.error)}</pre>
+        <button onclick="loadModel(true)">Re-analyze</button>
+      </div>`;
+    return;
+  }
+  if (!state.model) {
+    view.innerHTML = `<div class="state-card"><h2>Analyzing…</h2>
+      <p>Parsing sources and extracting interfaces. Large projects can take a few seconds.</p></div>`;
+    return;
+  }
+  if (state.tab === "interface") renderInterface(view);
+  else if (state.tab === "violations") renderViolations(view);
+  else renderDsm(view);
+}
+
+/* ------- interface (ledger) view ------- */
+
+function memberVisible(m) {
+  if (state.exposedOnly && m.external_consumers.length === 0) return false;
+  if (!state.showInternal && m.external_consumers.length === 0 && m.internal_consumers.length === 0) return false;
+  return true;
+}
+
+function memberViolating(m) {
+  return m.private && m.external_consumers.length > 0;
+}
+
+function renderInterface(view) {
+  const mod = state.selected && state.model.modules[state.selected];
+  if (!mod) { view.innerHTML = `<div class="empty-note">Select a module.</div>`; return; }
+  const name = state.selected;
+
+  const groups = new Map();  // owner_class (or "") → members
+  for (const m of mod.members) {
+    if (!memberVisible(m)) continue;
+    const key = m.owner_class || "";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(m);
+  }
+
+  const fanChips = (mods) => mods.length
+    ? mods.map(f => `<button class="chip" data-goto="${esc(f)}">${esc(f)}</button>`).join(" ")
+    : `<span class="lbl">none</span>`;
+
+  let html = `
+    <div class="mod-head">
+      <h1>${esc(name)}</h1>
+      <div class="file">${esc(mod.file || "")}</div>
+      <div class="fan-row">
+        <span><span class="lbl">used by</span>${fanChips(mod.fan_in)}</span>
+        <span><span class="lbl">uses</span>${fanChips(mod.fan_out)}</span>
+      </div>
+    </div>
+    <div class="filters">
+      <label><input type="checkbox" id="f-exposed" ${state.exposedOnly ? "checked" : ""}>
+        exposed members only</label>
+      <label><input type="checkbox" id="f-internal" ${state.showInternal ? "checked" : ""}>
+        include never-used members</label>
+      <span style="color:var(--muted)">${mod.surface} exposed of ${mod.members.length} members</span>
+    </div>
+    <div class="ledger">`;
+
+  const sortedGroups = [...groups.keys()].sort();
+  for (const g of sortedGroups) {
+    const members = groups.get(g);
+    if (g) {
+      html += `<div class="lgroup-title">${esc(g.slice(name.length + 1))} <span class="k">class interface</span></div>`;
+    } else if (sortedGroups.length > 1 || g === "") {
+      html += `<div class="lgroup-title">module level</div>`;
+    }
+    for (const m of members) html += ledgerRow(m);
+  }
+  if (![...groups.values()].some(g => g.length)) {
+    html += `<div class="empty-note">Nothing crosses this module's boundary under the current filters.
+      Uncheck “exposed members only” to see the full member list.</div>`;
+  }
+  view.innerHTML = html + `</div>`;
+
+  $("#f-exposed").addEventListener("change", e => { state.exposedOnly = e.target.checked; renderView(); });
+  $("#f-internal").addEventListener("change", e => { state.showInternal = e.target.checked; renderView(); });
+  view.querySelectorAll("[data-goto]").forEach(el =>
+    el.addEventListener("click", () => selectModule(el.dataset.goto)));
+  view.querySelectorAll(".lrow-main").forEach(el =>
+    el.addEventListener("click", () => toggleRow(el.dataset.q)));
+  view.querySelectorAll("[data-src]").forEach(el =>
+    el.addEventListener("click", ev => { ev.stopPropagation(); loadSnippet(el); }));
+}
+
+function ledgerRow(m) {
+  const open = state.openRows.has(m.qname);
+  const nExt = m.external_consumers.length;
+  const extMods = new Set(m.external_consumers.map(c => c.module));
+  const violating = memberViolating(m);
+  const count = nExt
+    ? `<b>${nExt}</b> use${nExt > 1 ? "s" : ""} · ${extMods.size} module${extMods.size > 1 ? "s" : ""}`
+    : (m.internal_consumers.length ? `internal only` : `unused`);
+  const shortName = m.owner_class ? m.qname.slice(m.owner_class.length + 1) : m.name;
+  let html = `
+    <div class="lrow ${violating ? "violating" : ""}" id="row-${esc(cssId(m.qname))}">
+      <div class="lrow-main" data-q="${esc(m.qname)}" role="button" tabindex="0"
+           aria-expanded="${open}">
+        <span class="kind ${esc(m.kind)}" title="${esc(m.kind)}">${esc(KIND_GLYPH[m.kind] || "?")}</span>
+        <span class="mem-name ${m.private ? "private" : ""}">${esc(shortName)}</span>
+        <span class="leader"></span>
+        <span class="use-count ${nExt ? "" : "none"}">${count}</span>
+      </div>`;
+  if (open) {
+    const byMod = new Map();
+    for (const c of m.external_consumers) {
+      if (!byMod.has(c.module)) byMod.set(c.module, []);
+      byMod.get(c.module).push(c.qname);
+    }
+    let detail = "";
+    for (const [cm, qs] of [...byMod.entries()].sort()) {
+      detail += `<div class="consumer-mod">
+        <span class="cm" data-goto2="${esc(cm)}">${esc(cm)}</span>
+        <span class="cq">— ${qs.map(esc).join(", ")}</span></div>`;
+    }
+    if (m.internal_consumers.length) {
+      detail += `<div class="consumer-mod"><span class="cq">${m.internal_consumers.length}
+        internal reference${m.internal_consumers.length > 1 ? "s" : ""} within the module</span></div>`;
+    }
+    if (!detail) detail = `<div class="consumer-mod"><span class="cq">no references found</span></div>`;
+    detail += `<div class="detail-actions">
+        <button data-src="${esc(m.file || "")}" data-line="${m.line || 1}">View definition</button>
+        <span class="cq" style="align-self:center">${esc(m.file || "")}${m.line ? ":" + m.line : ""}</span>
+      </div><div class="snippet-slot"></div>`;
+    html += `<div class="lrow-detail">${detail}</div>`;
+  }
+  return html + `</div>`;
+}
+
+function cssId(s) { return s.replace(/[^a-zA-Z0-9_-]/g, "_"); }
+
+function toggleRow(q) {
+  if (state.openRows.has(q)) state.openRows.delete(q); else state.openRows.add(q);
+  renderView();
+  // rebind goto handlers inside details
+  document.querySelectorAll("[data-goto2]").forEach(el =>
+    el.addEventListener("click", () => selectModule(el.dataset.goto2)));
+}
+
+async function loadSnippet(btn) {
+  const slot = btn.closest(".lrow-detail").querySelector(".snippet-slot");
+  slot.innerHTML = `<div class="snippet"><div class="ln"><span class="no"></span><span class="tx">loading…</span></div></div>`;
+  try {
+    const resp = await fetch(`/api/source?file=${encodeURIComponent(btn.dataset.src)}&line=${btn.dataset.line}`);
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    slot.innerHTML = `<div class="snippet">` + data.lines.map((tx, i) => {
+      const no = data.start + i;
+      return `<div class="ln ${no === data.focus ? "focus" : ""}">
+        <span class="no">${no}</span><span class="tx">${esc(tx) || " "}</span></div>`;
+    }).join("") + `</div>`;
+  } catch (e) {
+    slot.innerHTML = `<div class="snippet"><div class="ln"><span class="no"></span><span class="tx">${esc(String(e))}</span></div></div>`;
+  }
+}
+
+/* ------- violations view ------- */
+
+function renderViolations(view) {
+  const vios = state.model.violations;
+  const kinds = [...new Set(vios.map(v => v.kind))].sort();
+  const shown = vios.filter(v =>
+    state.sev[v.severity] &&
+    (state.vioKind === "all" || v.kind === state.vioKind) &&
+    (!state.vioSearch || (v.message + v.target).toLowerCase().includes(state.vioSearch.toLowerCase())));
+
+  const sevToggle = (sev, label) => `
+    <label class="sev-toggle ${state.sev[sev] ? "on" : ""}">
+      <input type="checkbox" data-sev="${sev}" ${state.sev[sev] ? "checked" : ""}>
+      <span class="dot ${sev}"></span>${label}
+    </label>`;
+
+  view.innerHTML = `
+    <div class="vio-filters">
+      ${sevToggle("high", "high")} ${sevToggle("medium", "medium")} ${sevToggle("info", "advisory")}
+      <select id="vio-kind" style="font:inherit;padding:3px 6px;background:var(--panel);color:inherit;border:1px solid var(--rule);border-radius:4px">
+        <option value="all">all kinds</option>
+        ${kinds.map(k => `<option value="${esc(k)}" ${state.vioKind === k ? "selected" : ""}>${esc(k)}</option>`).join("")}
+      </select>
+      <input type="search" id="vio-search" placeholder="Search findings…" value="${esc(state.vioSearch)}">
+      <span style="color:var(--muted);font-size:13px">${shown.length} of ${vios.length} findings</span>
+    </div>
+    ${shown.length ? `
+    <table class="vio">
+      <thead><tr><th></th><th>Kind</th><th>Finding</th><th>Where</th></tr></thead>
+      <tbody>
+      ${shown.map(v => `
+        <tr class="clickable" data-mod="${esc(v.target_module || "")}" data-q="${esc(v.target || "")}">
+          <td><span class="dot ${v.severity}"></span></td>
+          <td><span class="kind-chip">${esc(v.kind)}</span></td>
+          <td class="msg">${esc(v.message)}${state.newVioKeys.has(vioKey(v)) ? `<span class="vio-new">NEW</span>` : ""}</td>
+          <td class="loc">${esc(v.file || "")}${v.line ? ":" + v.line : ""}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>` : `
+    <div class="empty-note">No findings match the current filters.
+      ${!state.sev.info ? "Advisory findings are hidden — toggle “advisory” to include them." : ""}</div>`}`;
+
+  view.querySelectorAll("[data-sev]").forEach(el =>
+    el.addEventListener("change", () => { state.sev[el.dataset.sev] = el.checked; renderView(); }));
+  $("#vio-kind").addEventListener("change", e => { state.vioKind = e.target.value; renderView(); });
+  $("#vio-search").addEventListener("input", e => { state.vioSearch = e.target.value; renderView(); });
+  view.querySelectorAll("tr.clickable").forEach(tr =>
+    tr.addEventListener("click", () => {
+      const mod = tr.dataset.mod;
+      if (!mod || !state.model.modules[mod]) return;
+      state.tab = "interface";
+      state.exposedOnly = false;
+      if (tr.dataset.q) state.openRows.add(tr.dataset.q);
+      selectModule(mod, tr.dataset.q);
+    }));
+}
+
+/* ------- dependency matrix ------- */
+
+function dsmOrder(model) {
+  // Providers-first ordering: repeatedly peel modules that depend on nothing
+  // still unpeeled; break cycles by peeling the one with fewest remaining deps.
+  const deps = new Map();  // module → set of modules it uses
+  for (const m of Object.keys(model.modules)) deps.set(m, new Set());
+  for (const e of model.module_edges) deps.get(e.source).add(e.target);
+  const order = [];
+  const remaining = new Set(deps.keys());
+  while (remaining.size) {
+    let pick = null, best = Infinity;
+    for (const m of [...remaining].sort()) {
+      const n = [...deps.get(m)].filter(d => remaining.has(d)).length;
+      if (n < best) { best = n; pick = m; if (n === 0) break; }
+    }
+    order.push(pick);
+    remaining.delete(pick);
+  }
+  return order;
+}
+
+function renderDsm(view) {
+  const model = state.model;
+  const order = dsmOrder(model);
+  const edgeMap = new Map();
+  for (const e of model.module_edges) edgeMap.set(e.source + "→" + e.target, e);
+
+  const cycleBanners = model.cycles.map(c =>
+    `<div class="cycle-banner">⟳ cycle: ${c.map(esc).join(" ↔ ")}</div>`).join("");
+
+  const short = m => {
+    const parts = m.split(".");
+    return parts.length > 2 ? "…" + parts.slice(-2).join(".") : m;
+  };
+
+  let html = `${cycleBanners}
+    <div class="dsm-note">Rows use columns. Providers are ordered first (left/top), so with clean
+      layering all marks sit below the diagonal; marks <em>above</em> it are back-references —
+      cycle participants. Red cells contain references to private members. Click a cell to list
+      the member-level references behind it.</div>
+    <div class="dsm-wrap"><table class="dsm">
+    <thead><tr><th></th>${order.map(m => `<th title="${esc(m)}">${esc(short(m))}</th>`).join("")}</tr></thead><tbody>`;
+  for (const row of order) {
+    html += `<tr><th title="${esc(row)}">${esc(short(row))}</th>`;
+    for (const col of order) {
+      if (row === col) { html += `<td class="diag"></td>`; continue; }
+      const e = edgeMap.get(row + "→" + col);
+      if (!e) { html += `<td></td>`; continue; }
+      const leak = e.refs.some(r => r.private);
+      const sel = state.dsmCell && state.dsmCell[0] === row && state.dsmCell[1] === col;
+      html += `<td class="dep ${leak ? "leak" : ""} ${sel ? "selected" : ""}"
+        data-s="${esc(row)}" data-t="${esc(col)}" title="${esc(row)} uses ${esc(col)}: ${e.weight} refs"
+        tabindex="0">${e.weight}</td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table></div><div id="dsm-refs"></div>`;
+  view.innerHTML = html;
+
+  view.querySelectorAll("td.dep").forEach(td => {
+    const open = () => { state.dsmCell = [td.dataset.s, td.dataset.t]; renderView(); };
+    td.addEventListener("click", open);
+    td.addEventListener("keydown", e => { if (e.key === "Enter") open(); });
+  });
+
+  if (state.dsmCell) {
+    const e = edgeMap.get(state.dsmCell[0] + "→" + state.dsmCell[1]);
+    const refsEl = $("#dsm-refs");
+    if (e) {
+      refsEl.innerHTML = `<h3>${esc(e.source)} → ${esc(e.target)} (${e.weight})</h3>` +
+        e.refs.map(r => `
+          <div class="ref-row">
+            <span>${esc(r.from)}</span><span class="arrow">→</span>
+            <span>${r.private ? `<span class="leak-mark">${esc(r.to)}</span>` : esc(r.to)}</span>
+            ${r.private ? `<span class="leak-mark">private</span>` : ""}
+          </div>`).join("");
+      refsEl.scrollIntoView({ block: "nearest" });
+    } else refsEl.innerHTML = "";
+  }
+}
+
+/* ---------------- navigation ---------------- */
+
+function selectModule(name, focusQname) {
+  state.selected = name;
+  state.tab = "interface";
+  renderAll();
+  if (focusQname) {
+    const el = document.getElementById("row-" + cssId(focusQname));
+    if (el) el.scrollIntoView({ block: "center" });
+  } else {
+    $("#view").scrollTop = 0;
+  }
+}
+
+$("#module-list").addEventListener("click", e => {
+  const li = e.target.closest("li[data-mod]");
+  if (li) selectModule(li.dataset.mod);
+});
+$("#module-list").addEventListener("keydown", e => {
+  const li = e.target.closest("li[data-mod]");
+  if (li && e.key === "Enter") selectModule(li.dataset.mod);
+});
+$("#module-search").addEventListener("input", e => {
+  state.moduleFilter = e.target.value;
+  renderSidebar();
+});
+document.querySelectorAll("nav.tabs button").forEach(b =>
+  b.addEventListener("click", () => { state.tab = b.dataset.tab; renderView(); }));
+$("#reanalyze").addEventListener("click", () => loadModel(true));
+
+// Deep links: ?tab=interface|violations|deps&module=pkg.mod&advisories=1
+{
+  const params = new URLSearchParams(location.search);
+  const tab = params.get("tab");
+  if (["interface", "violations", "deps"].includes(tab)) state.tab = tab;
+  if (params.get("module")) state.selected = params.get("module");
+  if (params.get("advisories") === "1") state.sev.info = true;
+}
+
+loadModel(false);
+</script>
+</body>
+</html>

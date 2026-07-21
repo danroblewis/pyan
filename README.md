@@ -67,6 +67,7 @@ The original stable has been archived; the development repository is now the sol
   - [CLI usage](#cli-usage-1)
     - [Cycle detection](#cycle-detection)
   - [Python API](#python-api-1)
+- [Interface explorer (web UI)](#interface-explorer-web-ui)
 - [Install](#install)
   - [Development setup](#development-setup)
 - [Features](#features)
@@ -462,6 +463,50 @@ dot = pyan.create_modulegraph(
 ```
 
 See `pyan.create_modulegraph()` for the full list of parameters.
+
+
+# Interface explorer (web UI)
+
+```bash
+pyan3 --web src/                 # analyze, serve on http://127.0.0.1:8765/, open browser
+pyan3 --web --port 9000 src/     # custom port
+pyan3 --web --no-browser src/    # don't auto-open a browser
+```
+
+Python has no enforced interfaces, but every codebase has *implicit* ones: the
+members of a module that other modules actually reference. `--web` serves a
+local single-page UI built around that idea — instead of drawing every edge in
+the call graph, it shows only what crosses module boundaries:
+
+- **Interface** — for the selected module, a ledger of its exposed members
+  (typically a small fraction of all members), each with its external
+  consumers, expandable to consumer lists and a source snippet. Fan-in /
+  fan-out module chips navigate the boundary graph.
+- **Violations** — cross-module access to `_private` members (high severity),
+  cross-class private access and module dependency cycles (medium), and
+  advisories such as public top-level functions never used outside their
+  module (hidden by default; toggle "advisory" to see them).
+- **Dependencies** — a dependency structure matrix ordered providers-first:
+  with clean layering all marks sit below the diagonal, so cycle participants
+  are immediately visible above it. Cells containing private-member references
+  are highlighted; clicking a cell lists the member-level references behind it.
+
+The **Re-analyze** button re-globs the sources and re-runs the analysis
+without restarting the server, and reports which findings were resolved or
+introduced since the last run — so you can refactor toward a cleaner boundary
+and watch the violations disappear. Analysis errors (e.g. a syntax error
+mid-refactor) are shown in the UI without killing the server.
+
+The same data is available programmatically:
+
+```python
+from pyan.interfaces import create_interface_model
+
+model = create_interface_model("src/**/*.py")
+model["modules"]        # per-module members, consumers, fan-in/out
+model["module_edges"]   # aggregated cross-module edges with member-level refs
+model["violations"]     # findings, sorted by severity
+```
 
 
 # Install

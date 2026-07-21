@@ -2,7 +2,10 @@
 
 ## 2.6.3 (in progress)
 
-*No user-visible changes yet.*
+### Added
+
+- **`--web`: local interface explorer.** `pyan3 --web src/` serves a single-page web UI (localhost, stdlib-only server) for exploring the *implicit interfaces* of the analyzed code — for each module, the set of members actually referenced from outside that module, with their external consumers. Three views: a per-module **interface ledger** (exposed members with consumer counts, expandable to consumer lists and source snippets), a filterable **violations** table, and a **dependency structure matrix** (providers-first ordering, so back-references — cycle participants — stand out above the diagonal; cells with private-member references highlighted). A **Re-analyze** button re-runs the analysis in place and reports findings resolved/introduced since the previous run, supporting an edit → re-analyze refactoring loop. `--port` and `--no-browser` accompany it.
+- **Boundary-violation detection** (`pyan.interfaces`, new module): `build_interface_model()` / `create_interface_model()` produce a JSON-serializable model of module surfaces, aggregated module→module edges with the member-level references behind them, and findings: cross-module access to `_private` members (high), cross-class access to private class members and module dependency cycles (medium), plus advisories (public top-level functions/classes never used outside their module; oversized externally-used surfaces).
 
 
 ---
